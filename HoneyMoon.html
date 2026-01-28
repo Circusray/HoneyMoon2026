@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蜜月旅行紀錄 (Honeymoon Log)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f3f4f6; }
+        .theme-iceland { background-color: #e0f2fe; border-left: 4px solid #0ea5e9; } /* 冰島藍 */
+        .theme-netherlands { background-color: #ffedd5; border-left: 4px solid #f97316; } /* 荷蘭橘 */
+        .theme-maldives { background-color: #ccfbf1; border-left: 4px solid #14b8a6; } /* 馬爾地夫綠 */
+        .theme-transit { background-color: #f3f4f6; border-left: 4px solid #6b7280; } /* 移動灰 */
+    </style>
+</head>
+<body class="pb-20">
+
+    <div id="app" class="max-w-md mx-auto min-h-screen bg-white shadow-xl relative">
+        
+        <header class="bg-indigo-600 text-white p-6 sticky top-0 z-10 shadow-md">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold">🍯 Honeymoon Log</h1>
+                    <p class="text-indigo-200 text-sm">3/14 - 4/4 (21 Days)</p>
+                </div>
+                <div class="space-x-2">
+                    <button @click="exportData" class="text-white hover:text-indigo-200" title="匯出資料"><i class="fa-solid fa-download"></i></button>
+                    <button @click="triggerImport" class="text-white hover:text-indigo-200" title="匯入資料"><i class="fa-solid fa-upload"></i></button>
+                    <input type="file" id="importFile" @change="importData" class="hidden">
+                </div>
+            </div>
+        </header>
+
+        <div class="p-4 space-y-6">
+            <div v-if="events.length === 0" class="text-center text-gray-400 py-10">
+                <i class="fa-solid fa-plane-departure text-4xl mb-2"></i>
+                <p>還沒有行程，按右下角新增！</p>
+            </div>
+
+            <div v-for="(dayEvents, dateKey) in groupedEvents" :key="dateKey">
+                <div class="flex items-center mb-2 sticky top-20 z-0 bg-white/90 backdrop-blur py-2 px-1 rounded-lg">
+                    <div class="font-bold text-gray-800 text-lg mr-2">{{ formatDate(dateKey) }}</div>
+                    <span :class="getCountryBadgeClass(dayEvents[0].country)" class="text-xs px-2 py-1 rounded text-white font-bold">
+                        {{ getCountryName(dayEvents[0].country) }}
+                    </span>
+                </div>
+
+                <div class="space-y-3">
+                    <div v-for="event in dayEvents" :key="event.id" 
+                         class="p-3 rounded-lg shadow-sm flex items-start relative group transition-all hover:shadow-md"
+                         :class="getThemeClass(event.country)">
+                        
+                        <div class="flex flex-col items-center mr-4 min-w-[50px]">
+                            <span class="text-xs font-bold text-gray-500">{{ formatTime(event.date) }}</span>
+                            <div class="mt-1 w-8 h-8 rounded-full flex items-center justify-center bg-white/80 text-gray-600 shadow-sm">
+                                <i :class="getTypeIcon(event.type)"></i>
+                            </div>
+                        </div>
+
+                        <div class="flex-1">
+                            <h3 class="font-bold text-gray-800 text-lg leading-tight">{{ event.title }}</h3>
+                            <p class="text-sm text-gray-600 mt-1 flex items-center">
+                                <i class="fa-solid fa-location-dot mr-1 text-gray-400"></i> {{ event.location }}
+                            </p>
+                            
+                            <a v-if="event.mapUrl" :href="event.mapUrl" target="_blank" 
+                               class="inline-block mt-2 text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-50">
+                                <i class="fa-solid fa-map"></i> 開啟地圖
+                            </a>
+                        </div>
+
+                        <button @click="deleteEvent(event.id)" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 transition-colors">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button @click="showModal = true" 
+                class="fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-700 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110 z-20">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+
+        <div v-if="showModal" class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4 backdrop-blur-sm">
+            <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-slide-up">
+                <div class="bg-gray-100 p-4 flex justify-between items-center border-b">
+                    <h3 class="font-bold text-lg">新增行程</h3>
+                    <button @click="showModal = false" class="text-gray-500 hover:text-gray-800"><i class="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+                
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">名稱</label>
+                        <input v-model="newEvent.title" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如: 藍湖溫泉">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">日期</label>
+                            <input v-model="newEvent.dateOnly" @change="autoSetCountry" type="date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">時間</label>
+                            <input v-model="newEvent.timeOnly" type="time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">地點</label>
+                        <input v-model="newEvent.location" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="機場 / 飯店名">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Google Maps 連結</label>
+                        <input v-model="newEvent.mapUrl" type="url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="https://goo.gl/maps/...">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">類型</label>
+                            <select v-model="newEvent.type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                <option value="flight">✈️ 飛行</option>
+                                <option value="hotel">🏨 住宿</option>
+                                <option value="spot">📍 景點</option>
+                                <option value="food">🍽️ 美食</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">國家區域</label>
+                            <select v-model="newEvent.country" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                <option value="transit">移動/轉機</option>
+                                <option value="iceland">冰島</option>
+                                <option value="netherlands">荷蘭</option>
+                                <option value="maldives">馬爾地夫</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button @click="addEvent" :disabled="!newEvent.title" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 disabled:bg-gray-400 mt-2">
+                        加入行程
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+    // 引入 Firebase 模組 (CDN)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { createApp } from "https://unpkg.com/vue@3/dist/vue.esm-browser.js";
+
+    // 🔴【重要】請將您申請到的 Firebase Config 貼在這裡取代下方內容
+    const firebaseConfig = {
+    apiKey: "AIzaSyCjE2_CoEeaP0IlEq-dhRRzde4LVzYq8dA",
+    authDomain: "honeymoon2026-d29be.firebaseapp.com",
+    databaseURL: "https://honeymoon2026-d29be-default-rtdb.firebaseio.com",
+    projectId: "honeymoon2026-d29be",
+    storageBucket: "honeymoon2026-d29be.firebasestorage.app",
+    messagingSenderId: "610186130333",
+    appId: "1:610186130333:web:4f1879bc689b63a805f574",
+    measurementId: "G-3F72F5GVJK"
+  };
+
+    // 初始化 Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const dbRef = ref(db, 'honeymoon_trips'); // 這是我們存資料的路徑
+
+    createApp({
+        data() {
+            return {
+                showModal: false,
+                events: [],
+                newEvent: {
+                    title: '',
+                    dateOnly: '2026-03-14',
+                    timeOnly: '12:00',
+                    location: '',
+                    mapUrl: '',
+                    type: 'spot',
+                    country: 'transit'
+                }
+            }
+        },
+        computed: {
+            // 分組邏輯 (維持不變)
+            groupedEvents() {
+                const groups = {};
+                const sorted = [...this.events].sort((a, b) => new Date(a.date) - new Date(b.date));
+                sorted.forEach(event => {
+                    const dateKey = event.date.split('T')[0];
+                    if (!groups[dateKey]) groups[dateKey] = [];
+                    groups[dateKey].push(event);
+                });
+                return groups;
+            }
+        },
+        mounted() {
+            // 監聽雲端資料庫變化 (Realtime Sync)
+            onValue(dbRef, (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    // 把 Firebase 的物件格式轉回陣列
+                    this.events = Object.values(data);
+                } else {
+                    this.events = [];
+                }
+            });
+        },
+        methods: {
+            autoSetCountry() {
+                const date = new Date(this.newEvent.dateOnly);
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                if (month === 3) {
+                    if (day >= 15 && day < 23) this.newEvent.country = 'iceland';
+                    else if (day >= 23 && day < 30) this.newEvent.country = 'netherlands';
+                    else if (day >= 30) this.newEvent.country = 'transit';
+                    else this.newEvent.country = 'transit';
+                } else if (month === 4) {
+                    this.newEvent.country = 'maldives';
+                }
+            },
+            addEvent() {
+                if (!this.newEvent.title) return;
+                const fullDate = `${this.newEvent.dateOnly}T${this.newEvent.timeOnly}`;
+                const eventID = Date.now().toString(); // 用時間當 ID
+                
+                const eventData = {
+                    id: eventID,
+                    title: this.newEvent.title,
+                    date: fullDate,
+                    location: this.newEvent.location,
+                    mapUrl: this.newEvent.mapUrl,
+                    type: this.newEvent.type,
+                    country: this.newEvent.country
+                };
+
+                // 🔥 寫入雲端 (取代原本的 this.events.push)
+                set(ref(db, 'honeymoon_trips/' + eventID), eventData);
+
+                this.showModal = false;
+                this.newEvent.title = '';
+                this.newEvent.location = '';
+                this.newEvent.mapUrl = '';
+            },
+            deleteEvent(id) {
+                if(confirm('確定要刪除這個行程嗎？')) {
+                    // 🔥 從雲端刪除
+                    remove(ref(db, 'honeymoon_trips/' + id));
+                }
+            },
+            // UI 輔助函式 (維持不變)
+            getThemeClass(country) { return `theme-${country}`; },
+            getCountryBadgeClass(country) {
+                switch(country) {
+                    case 'iceland': return 'bg-sky-500';
+                    case 'netherlands': return 'bg-orange-500';
+                    case 'maldives': return 'bg-teal-500';
+                    default: return 'bg-gray-500';
+                }
+            },
+            getCountryName(country) {
+                const map = { iceland: '冰島', netherlands: '荷蘭', maldives: '馬爾地夫', transit: '移動日' };
+                return map[country] || country;
+            },
+            getTypeIcon(type) {
+                const map = { flight: 'fa-plane', hotel: 'fa-bed', spot: 'fa-map-location-dot', food: 'fa-utensils' };
+                return `fa-solid ${map[type]}`;
+            },
+            formatDate(dateStr) {
+                const d = new Date(dateStr);
+                const week = ['日','一','二','三','四','五','六'];
+                return `${d.getMonth()+1}/${d.getDate()} (${week[d.getDay()]})`;
+            },
+            formatTime(isoStr) { return isoStr.split('T')[1]; },
+            // 仍保留匯出功能當備份
+            exportData() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.events));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "honeymoon_backup.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            },
+            triggerImport() { document.getElementById('importFile').click(); },
+            importData(event) {
+                // 匯入時也直接寫入雲端
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const imported = JSON.parse(e.target.result);
+                        if (confirm(`即將匯入 ${imported.length} 筆行程，這會覆蓋雲端資料，確定嗎？`)) {
+                            imported.forEach(item => {
+                                set(ref(db, 'honeymoon_trips/' + item.id), item);
+                            });
+                        }
+                    } catch (err) { alert('檔案格式錯誤'); }
+                };
+                reader.readAsText(file);
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
