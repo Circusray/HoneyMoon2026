@@ -11,10 +11,10 @@
 
     <style>
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f3f4f6; }
-        .theme-iceland { background-color: #e0f2fe; border-left: 4px solid #0ea5e9; } /* 冰島藍 */
-        .theme-netherlands { background-color: #ffedd5; border-left: 4px solid #f97316; } /* 荷蘭橘 */
-        .theme-maldives { background-color: #ccfbf1; border-left: 4px solid #14b8a6; } /* 馬爾地夫綠 */
-        .theme-transit { background-color: #f3f4f6; border-left: 4px solid #6b7280; } /* 移動灰 */
+        .theme-iceland { background-color: #e0f2fe; border-left: 4px solid #0ea5e9; } 
+        .theme-netherlands { background-color: #ffedd5; border-left: 4px solid #f97316; } 
+        .theme-maldives { background-color: #ccfbf1; border-left: 4px solid #14b8a6; } 
+        .theme-transit { background-color: #f3f4f6; border-left: 4px solid #6b7280; } 
     </style>
 </head>
 <body class="pb-20">
@@ -61,8 +61,7 @@
                             </div>
                         </div>
 
-                        <div class="flex-1">
-                            <h3 class="font-bold text-gray-800 text-lg leading-tight">{{ event.title }}</h3>
+                        <div class="flex-1 pr-6"> <h3 class="font-bold text-gray-800 text-lg leading-tight">{{ event.title }}</h3>
                             <p class="text-sm text-gray-600 mt-1 flex items-center">
                                 <i class="fa-solid fa-location-dot mr-1 text-gray-400"></i> {{ event.location }}
                             </p>
@@ -73,15 +72,20 @@
                             </a>
                         </div>
 
-                        <button @click="deleteEvent(event.id)" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 transition-colors">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+                        <div class="absolute top-2 right-2 flex space-x-2">
+                            <button @click="openEditModal(event)" class="text-gray-300 hover:text-blue-500 transition-colors">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button @click="deleteEvent(event.id)" class="text-gray-300 hover:text-red-500 transition-colors">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <button @click="showModal = true" 
+        <button @click="openAddModal" 
                 class="fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-700 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110 z-20">
             <i class="fa-solid fa-plus"></i>
         </button>
@@ -89,7 +93,7 @@
         <div v-if="showModal" class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4 backdrop-blur-sm">
             <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-slide-up">
                 <div class="bg-gray-100 p-4 flex justify-between items-center border-b">
-                    <h3 class="font-bold text-lg">新增行程</h3>
+                    <h3 class="font-bold text-lg">{{ isEditing ? '編輯行程' : '新增行程' }}</h3>
                     <button @click="showModal = false" class="text-gray-500 hover:text-gray-800"><i class="fa-solid fa-xmark text-xl"></i></button>
                 </div>
                 
@@ -116,7 +120,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Google Maps 連結</label>
+                        <label class="block text-sm font-medium text-gray-700">Google Maps or 相關連結</label>
                         <input v-model="newEvent.mapUrl" type="url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="https://goo.gl/maps/...">
                     </div>
 
@@ -141,8 +145,8 @@
                         </div>
                     </div>
 
-                    <button @click="addEvent" :disabled="!newEvent.title" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 disabled:bg-gray-400 mt-2">
-                        加入行程
+                    <button @click="saveEvent" :disabled="!newEvent.title" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 disabled:bg-gray-400 mt-2">
+                        {{ isEditing ? '儲存變更' : '加入行程' }}
                     </button>
                 </div>
             </div>
@@ -151,32 +155,32 @@
     </div>
 
     <script type="module">
-    // 引入 Firebase 模組 (CDN)
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
     import { createApp } from "https://unpkg.com/vue@3/dist/vue.esm-browser.js";
 
-    // 🔴【重要】請將您申請到的 Firebase Config 貼在這裡取代下方內容
+    // 您的 Firebase Config
     const firebaseConfig = {
-    apiKey: "AIzaSyCjE2_CoEeaP0IlEq-dhRRzde4LVzYq8dA",
-    authDomain: "honeymoon2026-d29be.firebaseapp.com",
-    databaseURL: "https://honeymoon2026-d29be-default-rtdb.firebaseio.com",
-    projectId: "honeymoon2026-d29be",
-    storageBucket: "honeymoon2026-d29be.firebasestorage.app",
-    messagingSenderId: "610186130333",
-    appId: "1:610186130333:web:4f1879bc689b63a805f574",
-    measurementId: "G-3F72F5GVJK"
-  };
+        apiKey: "AIzaSyCjE2_CoEeaP0IlEq-dhRRzde4LVzYq8dA",
+        authDomain: "honeymoon2026-d29be.firebaseapp.com",
+        databaseURL: "https://honeymoon2026-d29be-default-rtdb.firebaseio.com",
+        projectId: "honeymoon2026-d29be",
+        storageBucket: "honeymoon2026-d29be.firebasestorage.app",
+        messagingSenderId: "610186130333",
+        appId: "1:610186130333:web:4f1879bc689b63a805f574",
+        measurementId: "G-3F72F5GVJK"
+    };
 
-    // 初始化 Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const dbRef = ref(db, 'honeymoon_trips'); // 這是我們存資料的路徑
+    const dbRef = ref(db, 'honeymoon_trips');
 
     createApp({
         data() {
             return {
                 showModal: false,
+                isEditing: false, // 是否為編輯模式
+                editingId: null,  // 正在編輯的 ID
                 events: [],
                 newEvent: {
                     title: '',
@@ -190,7 +194,6 @@
             }
         },
         computed: {
-            // 分組邏輯 (維持不變)
             groupedEvents() {
                 const groups = {};
                 const sorted = [...this.events].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -203,11 +206,9 @@
             }
         },
         mounted() {
-            // 監聽雲端資料庫變化 (Realtime Sync)
             onValue(dbRef, (snapshot) => {
                 const data = snapshot.val();
                 if (data) {
-                    // 把 Firebase 的物件格式轉回陣列
                     this.events = Object.values(data);
                 } else {
                     this.events = [];
@@ -228,10 +229,50 @@
                     this.newEvent.country = 'maldives';
                 }
             },
-            addEvent() {
+            // 點擊「+」時觸發，清空表單
+            openAddModal() {
+                this.isEditing = false;
+                this.editingId = null;
+                // 重置為預設值
+                this.newEvent = {
+                    title: '',
+                    dateOnly: '2026-03-14',
+                    timeOnly: '12:00',
+                    location: '',
+                    mapUrl: '',
+                    type: 'spot',
+                    country: 'transit'
+                };
+                this.autoSetCountry(); // 根據預設日期設定顏色
+                this.showModal = true;
+            },
+            // 點擊「編輯筆」時觸發，填入資料
+            openEditModal(event) {
+                this.isEditing = true;
+                this.editingId = event.id;
+                
+                // 將 ISO 時間字串拆回 日期 與 時間
+                const [datePart, timePart] = event.date.split('T');
+                
+                this.newEvent = {
+                    title: event.title,
+                    dateOnly: datePart,
+                    timeOnly: timePart,
+                    location: event.location,
+                    mapUrl: event.mapUrl || '',
+                    type: event.type,
+                    country: event.country
+                };
+                this.showModal = true;
+            },
+            // 統一的儲存函式 (處理 新增 與 編輯)
+            saveEvent() {
                 if (!this.newEvent.title) return;
+                
                 const fullDate = `${this.newEvent.dateOnly}T${this.newEvent.timeOnly}`;
-                const eventID = Date.now().toString(); // 用時間當 ID
+                
+                // 決定 ID：如果是編輯就用舊的，新增就用當下時間
+                const eventID = this.isEditing ? this.editingId : Date.now().toString(); 
                 
                 const eventData = {
                     id: eventID,
@@ -243,21 +284,16 @@
                     country: this.newEvent.country
                 };
 
-                // 🔥 寫入雲端 (取代原本的 this.events.push)
+                // 寫入 Firebase (會自動覆蓋舊資料)
                 set(ref(db, 'honeymoon_trips/' + eventID), eventData);
 
                 this.showModal = false;
-                this.newEvent.title = '';
-                this.newEvent.location = '';
-                this.newEvent.mapUrl = '';
             },
             deleteEvent(id) {
                 if(confirm('確定要刪除這個行程嗎？')) {
-                    // 🔥 從雲端刪除
                     remove(ref(db, 'honeymoon_trips/' + id));
                 }
             },
-            // UI 輔助函式 (維持不變)
             getThemeClass(country) { return `theme-${country}`; },
             getCountryBadgeClass(country) {
                 switch(country) {
@@ -281,7 +317,6 @@
                 return `${d.getMonth()+1}/${d.getDate()} (${week[d.getDay()]})`;
             },
             formatTime(isoStr) { return isoStr.split('T')[1]; },
-            // 仍保留匯出功能當備份
             exportData() {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.events));
                 const downloadAnchorNode = document.createElement('a');
@@ -293,7 +328,6 @@
             },
             triggerImport() { document.getElementById('importFile').click(); },
             importData(event) {
-                // 匯入時也直接寫入雲端
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
@@ -311,6 +345,6 @@
             }
         }
     }).mount('#app');
-</script>
+    </script>
 </body>
 </html>
