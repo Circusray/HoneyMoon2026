@@ -15,7 +15,6 @@
         .theme-netherlands { background-color: #ffedd5; border-left: 4px solid #f97316; } 
         .theme-maldives { background-color: #ccfbf1; border-left: 4px solid #14b8a6; } 
         .theme-transit { background-color: #f3f4f6; border-left: 4px solid #6b7280; } 
-        /* 收折動畫 */
         .rotate-icon { transition: transform 0.3s ease; }
         .collapsed .rotate-icon { transform: rotate(-90deg); }
     </style>
@@ -51,7 +50,6 @@
                      :class="{ 'collapsed': collapsedDays[dateKey] }">
                     
                     <i class="fa-solid fa-chevron-down text-gray-400 mr-3 text-sm rotate-icon"></i>
-                    
                     <div class="font-bold text-gray-800 text-lg mr-3">{{ formatDate(dateKey) }}</div>
                     
                     <div class="flex flex-wrap gap-1">
@@ -81,10 +79,16 @@
                                 <i class="fa-solid fa-location-dot mr-1 text-gray-400"></i> {{ event.location }}
                             </p>
                             
-                            <a v-if="event.mapUrl" :href="event.mapUrl" target="_blank" 
-                               class="inline-block mt-2 text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-50">
-                                <i class="fa-solid fa-map"></i> 開啟地圖 or 相關連結
-                            </a>
+                            <div class="flex flex-wrap gap-2 mt-2">
+                                <a v-if="event.mapUrl" :href="event.mapUrl" target="_blank" 
+                                   class="inline-flex items-center text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-50 transition-colors">
+                                    <i class="fa-solid fa-map mr-1"></i> 地圖
+                                </a>
+                                <a v-for="(link, idx) in event.links" :key="idx" :href="link.url" target="_blank" 
+                                   class="inline-flex items-center text-xs bg-white text-indigo-600 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-50 transition-colors">
+                                    <i class="fa-solid fa-link mr-1"></i> {{ link.title || '連結' }}
+                                </a>
+                            </div>
                         </div>
 
                         <div class="absolute top-2 right-2 flex space-x-2">
@@ -108,13 +112,13 @@
         </button>
 
         <div v-if="showModal" class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4 backdrop-blur-sm">
-            <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-slide-up">
-                <div class="bg-gray-100 p-4 flex justify-between items-center border-b">
+            <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-slide-up flex flex-col max-h-[90vh]">
+                <div class="bg-gray-100 p-4 flex justify-between items-center border-b shrink-0">
                     <h3 class="font-bold text-lg">{{ isEditing ? '編輯行程' : '新增行程' }}</h3>
                     <button @click="showModal = false" class="text-gray-500 hover:text-gray-800"><i class="fa-solid fa-xmark text-xl"></i></button>
                 </div>
                 
-                <div class="p-6 space-y-4">
+                <div class="p-6 space-y-4 overflow-y-auto">
                     <div>
                         <label class="block text-sm font-medium text-gray-700">名稱</label>
                         <input v-model="newEvent.title" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500">
@@ -136,9 +140,26 @@
                         <input v-model="newEvent.location" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Google Maps & 相關連結</label>
-                        <input v-model="newEvent.mapUrl" type="url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">相關連結 (地圖/菜單/訂票)</label>
+                        
+                        <div v-if="newEvent.links && newEvent.links.length > 0" class="space-y-2 mb-3">
+                            <div v-for="(link, idx) in newEvent.links" :key="idx" class="flex items-center justify-between bg-white p-2 rounded border border-gray-200 text-sm">
+                                <div class="truncate mr-2">
+                                    <span class="font-bold text-gray-700">{{ link.title || '連結' }}:</span>
+                                    <span class="text-gray-500 text-xs ml-1 truncate">{{ link.url }}</span>
+                                </div>
+                                <button @click="removeLink(idx)" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-times-circle"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <input v-model="tempLink.title" type="text" placeholder="標題(選填)" class="w-1/3 rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+                            <input v-model="tempLink.url" type="url" placeholder="https://..." class="w-2/3 rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+                            <button @click="addLink" :disabled="!tempLink.url" class="bg-indigo-100 text-indigo-600 px-3 rounded-md hover:bg-indigo-200 disabled:opacity-50">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
@@ -176,7 +197,6 @@
     import { getDatabase, ref, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
     import { createApp } from "https://unpkg.com/vue@3/dist/vue.esm-browser.js";
 
-    // 使用您提供的 Key
     const firebaseConfig = {
         apiKey: "AIzaSyCjE2_CoEeaP0IlEq-dhRRzde4LVzYq8dA",
         authDomain: "honeymoon2026-d29be.firebaseapp.com",
@@ -199,16 +219,19 @@
                 isEditing: false, 
                 editingId: null,  
                 events: [],
-                collapsedDays: {}, // 🔴 新增：用來紀錄哪些天是被收折的
+                collapsedDays: {}, 
                 newEvent: {
                     title: '',
                     dateOnly: '2026-03-14',
                     timeOnly: '12:00',
                     location: '',
-                    mapUrl: '',
+                    mapUrl: '', // 舊欄位保留避免報錯
+                    links: [],  // 🔴 新增：連結陣列
                     type: 'spot',
                     country: 'transit'
-                }
+                },
+                // 🔴 新增：暫存正在輸入的連結
+                tempLink: { title: '', url: '' }
             }
         },
         computed: {
@@ -234,14 +257,12 @@
             });
         },
         methods: {
-            // 🔴 新增：切換收折狀態
             toggleDay(dateKey) {
                 this.collapsedDays[dateKey] = !this.collapsedDays[dateKey];
             },
-            // 🔴 新增：取得當天所有的不重複國家，用於顯示多個標籤
             getUniqueCountries(events) {
                 const countries = events.map(e => e.country);
-                return [...new Set(countries)]; // 使用 Set 去除重複
+                return [...new Set(countries)]; 
             },
             autoSetCountry() {
                 const date = new Date(this.newEvent.dateOnly);
@@ -256,6 +277,23 @@
                     this.newEvent.country = 'maldives';
                 }
             },
+            // 🔴 新增：加入連結到暫存清單
+            addLink() {
+                if (this.tempLink.url) {
+                    // 如果沒寫標題，預設顯示 "連結"
+                    const linkTitle = this.tempLink.title.trim() === '' ? '連結' : this.tempLink.title;
+                    this.newEvent.links.push({
+                        title: linkTitle,
+                        url: this.tempLink.url
+                    });
+                    // 清空輸入框
+                    this.tempLink = { title: '', url: '' };
+                }
+            },
+            // 🔴 新增：移除連結
+            removeLink(index) {
+                this.newEvent.links.splice(index, 1);
+            },
             openAddModal() {
                 this.isEditing = false;
                 this.editingId = null;
@@ -265,9 +303,11 @@
                     timeOnly: '12:00',
                     location: '',
                     mapUrl: '',
+                    links: [], // 初始化空陣列
                     type: 'spot',
                     country: 'transit'
                 };
+                this.tempLink = { title: '', url: '' };
                 this.autoSetCountry();
                 this.showModal = true;
             },
@@ -275,15 +315,25 @@
                 this.isEditing = true;
                 this.editingId = event.id;
                 const [datePart, timePart] = event.date.split('T');
+                
+                // 🔴 舊資料相容邏輯：
+                // 如果有 links 欄位就用，沒有的話，檢查有無舊 mapUrl，有的話轉成陣列
+                let existingLinks = event.links || [];
+                if (existingLinks.length === 0 && event.mapUrl) {
+                    existingLinks.push({ title: '地圖', url: event.mapUrl });
+                }
+
                 this.newEvent = {
                     title: event.title,
                     dateOnly: datePart,
                     timeOnly: timePart,
                     location: event.location,
-                    mapUrl: event.mapUrl || '',
+                    mapUrl: event.mapUrl || '', 
+                    links: JSON.parse(JSON.stringify(existingLinks)), // 深拷貝避免直接修到原物件
                     type: event.type,
                     country: event.country
                 };
+                this.tempLink = { title: '', url: '' };
                 this.showModal = true;
             },
             saveEvent() {
@@ -296,7 +346,8 @@
                     title: this.newEvent.title,
                     date: fullDate,
                     location: this.newEvent.location,
-                    mapUrl: this.newEvent.mapUrl,
+                    // mapUrl: this.newEvent.mapUrl, // 舊欄位可以不用存了，或留著當備份
+                    links: this.newEvent.links, // 🔴 儲存陣列
                     type: this.newEvent.type,
                     country: this.newEvent.country
                 };
@@ -362,5 +413,3 @@
     </script>
 </body>
 </html>
-
-
